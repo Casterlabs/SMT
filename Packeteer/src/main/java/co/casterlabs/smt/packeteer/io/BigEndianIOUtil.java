@@ -78,34 +78,4 @@ public class BigEndianIOUtil {
             .getShort(0);
     }
 
-    /* -------- */
-    /* flag     */
-    /* -------- */
-
-    public synchronized byte flagToBytes(boolean b0, boolean b1, boolean b2, boolean b3, boolean b4, boolean b5, boolean b6, boolean b7) {
-        byte value = 0;
-        if (b0) value |= 1 << 0;
-        if (b1) value |= 1 << 1;
-        if (b2) value |= 1 << 2;
-        if (b3) value |= 1 << 3;
-        if (b4) value |= 1 << 4;
-        if (b5) value |= 1 << 5;
-        if (b6) value |= 1 << 6;
-        if (b7) value |= 1 << 7;
-        return value;
-    }
-
-    public synchronized boolean[] bytesToFlag(byte b) {
-        return new boolean[] {
-                (b & (0 << 0)) != 0,
-                (b & (1 << 0)) != 0,
-                (b & (2 << 0)) != 0,
-                (b & (3 << 0)) != 0,
-                (b & (4 << 0)) != 0,
-                (b & (5 << 0)) != 0,
-                (b & (6 << 0)) != 0,
-                (b & (7 << 0)) != 0
-        };
-    }
-
 }

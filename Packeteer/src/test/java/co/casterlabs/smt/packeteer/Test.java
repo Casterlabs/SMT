@@ -16,8 +16,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.concurrent.ThreadLocalRandom;
 
-import co.casterlabs.commons.functional.tuples.Pair;
+import co.casterlabs.commons.functional.tuples.Triple;
 import co.casterlabs.smt.packeteer.io.PacketIO;
+import co.casterlabs.smt.packeteer.io.Flags;
 
 public class Test {
 
@@ -32,9 +33,9 @@ public class Test {
 
         while (true) {
             try {
-                Pair<Integer, byte[]> result = PacketIO.deserialize(bains);
-                int packetId = result.a();
-                byte[] payload = result.b();
+                Triple<Flags, Integer, byte[]> result = PacketIO.deserialize(bains);
+                int packetId = result.b();
+                byte[] payload = result.c();
 
                 if (packetId == 42) {
                     TestPacket test = new TestPacket();
@@ -70,7 +71,7 @@ public class Test {
 
         baos.write(randomBytes);
         baos.write(randomBytes);
-        PacketIO.serialize(0, new byte[PacketIO.bodyMaxLength], baos);
+        PacketIO.serialize(new Flags(), 0, new byte[PacketIO.bodyMaxLength], baos);
         baos.write(randomBytes);
         baos.write(test2Bytes);
         baos.write(randomBytes);

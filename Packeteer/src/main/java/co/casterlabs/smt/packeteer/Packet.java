@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 import co.casterlabs.smt.packeteer.io.PacketIO;
+import co.casterlabs.smt.packeteer.io.Flags;
 import co.casterlabs.smt.packeteer.io.PacketeerInput;
 import co.casterlabs.smt.packeteer.io.PacketeerOutput;
 
@@ -21,7 +22,7 @@ public abstract class Packet {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         this.writeOut(new PacketeerOutput(stream));
 
-        PacketIO.serialize(this.getId(), stream.toByteArray(), out);
+        PacketIO.serialize(new Flags(), this.getId(), stream.toByteArray(), out);
     }
 
     public final byte[] serializeToBytes() throws IOException {
