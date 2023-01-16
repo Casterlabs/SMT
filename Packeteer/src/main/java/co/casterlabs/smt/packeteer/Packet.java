@@ -5,8 +5,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import co.casterlabs.smt.packeteer.io.PacketIO;
 import co.casterlabs.smt.packeteer.io.Flags;
+import co.casterlabs.smt.packeteer.io.PacketIO;
 import co.casterlabs.smt.packeteer.io.PacketeerInput;
 import co.casterlabs.smt.packeteer.io.PacketeerOutput;
 
