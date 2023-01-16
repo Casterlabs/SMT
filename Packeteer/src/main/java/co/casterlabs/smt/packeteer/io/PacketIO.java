@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import xyz.e3ndr.fastloggingframework.logging.FastLogger;
 
 @Accessors(chain = true)
 public class PacketIO {
@@ -39,6 +40,11 @@ public class PacketIO {
     @Setter
     @NonNull
     private Flags flags = new Flags();
+
+    @Getter
+    @Setter
+    @NonNull
+    private FastLogger logger = new FastLogger();
 
     private BigEndianIOUtil util = new BigEndianIOUtil();
 
@@ -95,10 +101,17 @@ public class PacketIO {
                 succeedingPosition++;
 
                 if (succeedingPosition == headerMagic.length) {
-                    // We've found the start of a packet!
-                    return deserializePacket(in);
+                    this.logger.debug("Found start of packet!");
+                    Triple<Flags, Integer, byte[]> result = deserializePacket(in);
+
+                    if (result == null) {
+                        succeedingPosition = 0; // Corrupt packet, restart the search.
+                    } else {
+                        return result;
+                    }
                 }
             } else {
+                this.logger.debug("Search failed, whatever.");
                 succeedingPosition = 0; // Restart the search.
             }
         }
@@ -111,10 +124,16 @@ public class PacketIO {
             in.mark(bodyMaxLength + headerLength - headerMagic.length);
 
             byte[] flagsBytes = guaranteedRead(2, in);
-            byte[] idBytes = guaranteedRead(4, in);
-            byte[] payloadLengthBytes = guaranteedRead(2, in);
-
             Flags flags = new Flags(this.util.bytesToShort(flagsBytes));
+            this.logger.trace("flags=%s", String.format("%16s", Integer.toBinaryString(flags.getRawValue())).replace(' ', '0'));
+
+            byte[] idBytes = guaranteedRead(4, in);
+            int packetId = this.util.bytesToInt(idBytes);
+            this.logger.trace("packetId=%d", packetId);
+
+            byte[] payloadLengthBytes = guaranteedRead(2, in);
+            int payloadLength = this.util.bytesToShort(payloadLengthBytes);
+            this.logger.trace("payloadLength=%d", payloadLength);
 
             // Check the header CRC.
             byte[] headerCrcBytes = guaranteedRead(4, in);
@@ -125,15 +144,17 @@ public class PacketIO {
             computedHeaderCrc.update(idBytes);
             computedHeaderCrc.update(payloadLengthBytes);
 
-            if (headerCrc != computedHeaderCrc.getValue()) {
-                throw new IOException("Corrupt packet (Header CRC failed).");
+            long computedHeaderCrcValue = computedHeaderCrc.getValue();
+            this.logger.debug("(Header) Read CRC: %d, Computed CRC: %d", headerCrc, computedHeaderCrcValue);
+
+            if (headerCrc != computedHeaderCrcValue) {
+                this.logger.warn("Corrupt packet received (Header CRC failed), ignoring.");
+                return null;
             }
 
             // Body reading
             byte[] bodyCrcBytes = guaranteedRead(4, in);
             long bodyCrc = Integer.toUnsignedLong(this.util.bytesToInt(bodyCrcBytes));
-
-            int payloadLength = this.util.bytesToShort(payloadLengthBytes);
 
             byte[] payload = guaranteedRead(payloadLength, in);
 
@@ -142,12 +163,16 @@ public class PacketIO {
             CRC32 computedBodyCrc = new CRC32();
             computedBodyCrc.update(payload);
 
-            if (bodyCrc != computedBodyCrc.getValue()) {
-                throw new IOException("Corrupt packet (Body CRC failed).");
+            long computedBodyCrcValue = computedBodyCrc.getValue();
+            this.logger.debug("(Body) Read CRC: %d, Computed CRC: %d", bodyCrc, computedBodyCrcValue);
+
+            if (bodyCrc != computedBodyCrcValue) {
+                this.logger.warn("Corrupt packet received (Body CRC failed), ignoring.");
+                return null;
             }
 
             // Success
-            int packetId = this.util.bytesToInt(idBytes);
+            this.logger.debug("Successfully decoded packet.");
             return new Triple<>(flags, packetId, payload);
         } finally {
             in.reset();

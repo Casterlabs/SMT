@@ -20,11 +20,15 @@ import co.casterlabs.smt.packeteer.io.Flags;
 import co.casterlabs.smt.packeteer.io.PacketIO;
 import co.casterlabs.smt.packeteer.io.PacketeerInput;
 import co.casterlabs.smt.packeteer.io.PacketeerOutput;
+import xyz.e3ndr.fastloggingframework.logging.FastLogger;
+import xyz.e3ndr.fastloggingframework.logging.LogLevel;
 
 public class Test_PacketDeserialization {
     private static PacketIO io = new PacketIO();
 
     public static void main(String[] args) throws IOException {
+        io.getLogger().setCurrentLevel(LogLevel.ALL);
+
         long start = System.currentTimeMillis();
         ByteArrayInputStream bains = new ByteArrayInputStream(getBytes());
 
@@ -37,12 +41,12 @@ public class Test_PacketDeserialization {
                 if (packetId == 42) {
                     TestPacket test = new TestPacket();
                     test.deserialize(payload);
-                    System.out.println(test.testNumber);
+                    FastLogger.logStatic(test.testNumber);
                     long finish = System.currentTimeMillis();
-                    System.out.printf("Took %d ms.\n", finish - start);
+                    FastLogger.logStatic("Took %d ms.", finish - start);
                     System.exit(0); // Will otherwise hang forever.
                 } else {
-                    System.out.println("UNKNOWN PACKET ID: " + packetId);
+                    FastLogger.logStatic("UNKNOWN PACKET ID: " + packetId);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
