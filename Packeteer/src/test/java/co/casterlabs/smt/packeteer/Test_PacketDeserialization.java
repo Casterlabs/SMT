@@ -29,9 +29,7 @@ public class Test_PacketDeserialization {
     public static void main(String[] args) throws IOException {
         io.getLogger().setCurrentLevel(LogLevel.ALL);
 
-        long start = System.currentTimeMillis();
         byte[] bytes = getBytes();
-
         bytes[18]++; // Corrupt the first packet.
 
         ByteArrayInputStream bains = new ByteArrayInputStream(bytes);
@@ -46,8 +44,6 @@ public class Test_PacketDeserialization {
                     TestPacket test = new TestPacket();
                     test.deserialize(payload);
                     FastLogger.logStatic(test.testNumber);
-                    long finish = System.currentTimeMillis();
-                    FastLogger.logStatic("Took %d ms.", finish - start);
                 } else {
                     FastLogger.logStatic("UNKNOWN PACKET ID: " + packetId);
                 }
