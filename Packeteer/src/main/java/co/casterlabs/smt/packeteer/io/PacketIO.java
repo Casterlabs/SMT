@@ -12,6 +12,7 @@ import lombok.NonNull;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import xyz.e3ndr.fastloggingframework.logging.FastLogger;
+import xyz.e3ndr.fastloggingframework.logging.LogLevel;
 
 @Accessors(chain = true)
 public class PacketIO {
@@ -33,7 +34,7 @@ public class PacketIO {
 
     public static final int bodyMaxLength = 32768 - headerLength; // Just shy of 32kb
 
-    public static final int FLAG_UNRELIABLE = 0;
+    public static final int FLAG_UNRELIABLE = 0; // Not used directly by packeteer, just defined here for other frameworks.
     public static final int FLAG_IGNORE_BODY_CRC = 1;
 
     @Getter
@@ -44,7 +45,7 @@ public class PacketIO {
     @Getter
     @Setter
     @NonNull
-    private FastLogger logger = new FastLogger();
+    private FastLogger logger = new FastLogger(LogLevel.NONE);
 
     private BigEndianIOUtil util = new BigEndianIOUtil();
 
@@ -148,7 +149,7 @@ public class PacketIO {
             this.logger.debug("(Header) Read CRC: %d, Computed CRC: %d", headerCrc, computedHeaderCrcValue);
 
             if (headerCrc != computedHeaderCrcValue) {
-                this.logger.warn("Corrupt packet received (Header CRC failed), ignoring.");
+                this.logger.severe("Corrupt packet received! (Header CRC failed)");
                 return null;
             }
 
@@ -167,8 +168,12 @@ public class PacketIO {
             this.logger.debug("(Body) Read CRC: %d, Computed CRC: %d", bodyCrc, computedBodyCrcValue);
 
             if (bodyCrc != computedBodyCrcValue) {
-                this.logger.warn("Corrupt packet received (Body CRC failed), ignoring.");
-                return null;
+                if (flags.get(FLAG_IGNORE_BODY_CRC)) {
+                    this.logger.warn("Body CRC failed, continuing anyway (FLAG_IGNORE_BODY_CRC).");
+                } else {
+                    this.logger.severe("Corrupt packet received! (Body CRC failed)");
+                    return null;
+                }
             }
 
             // Success
