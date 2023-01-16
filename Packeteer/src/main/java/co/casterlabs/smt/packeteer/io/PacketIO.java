@@ -96,19 +96,29 @@ public class PacketIO {
         int succeedingPosition = 0;
         while (true) {
             int read = in.read();
+
+            if (read == -1) {
+                throw new IOException("End of stream reached whilst searching for packet.");
+            }
+
             byte expectedMagic = headerMagic[succeedingPosition];
 
             if (expectedMagic == read) {
                 succeedingPosition++;
 
                 if (succeedingPosition == headerMagic.length) {
-                    this.logger.debug("Found start of packet!");
-                    Triple<Flags, Integer, byte[]> result = deserializePacket(in);
+                    try {
+                        this.logger.debug("Found start of packet!");
+                        Triple<Flags, Integer, byte[]> result = deserializePacket(in);
 
-                    if (result == null) {
-                        succeedingPosition = 0; // Corrupt packet, restart the search.
-                    } else {
-                        return result;
+                        if (result == null) {
+                            succeedingPosition = 0; // Corrupt packet, restart the search.
+                        } else {
+                            return result;
+                        }
+                    } catch (IOException e) {
+                        in.reset(); // Important.
+                        throw e;
                     }
                 }
             } else {
@@ -119,68 +129,70 @@ public class PacketIO {
     }
 
     private Triple<Flags, Integer, byte[]> deserializePacket(InputStream in) throws IOException {
-        try {
-            // Header Magic has already been consumed irreversibly, but we still want to be
-            // able to pick up where we left off.
-            in.mark(bodyMaxLength + headerLength - headerMagic.length);
+        // Header Magic has already been consumed irreversibly, but we still want to be
+        // able to pick up where we left off.
+        in.mark(bodyMaxLength + headerLength - headerMagic.length);
 
-            byte[] flagsBytes = guaranteedRead(2, in);
-            Flags flags = new Flags(this.util.bytesToShort(flagsBytes));
-            this.logger.trace("flags=%s", String.format("%16s", Integer.toBinaryString(flags.getRawValue())).replace(' ', '0'));
+        byte[] flagsBytes = guaranteedRead(2, in);
+        Flags flags = new Flags(this.util.bytesToShort(flagsBytes));
+        this.logger.trace("flags=%s", String.format("%16s", Integer.toBinaryString(flags.getRawValue())).replace(' ', '0'));
 
-            byte[] idBytes = guaranteedRead(4, in);
-            int packetId = this.util.bytesToInt(idBytes);
-            this.logger.trace("packetId=%d", packetId);
+        byte[] idBytes = guaranteedRead(4, in);
+        int packetId = this.util.bytesToInt(idBytes);
+        this.logger.trace("packetId=%d", packetId);
 
-            byte[] payloadLengthBytes = guaranteedRead(2, in);
-            int payloadLength = this.util.bytesToShort(payloadLengthBytes);
-            this.logger.trace("payloadLength=%d", payloadLength);
+        byte[] payloadLengthBytes = guaranteedRead(2, in);
+        int payloadLength = this.util.bytesToShort(payloadLengthBytes);
+        this.logger.trace("payloadLength=%d", payloadLength);
 
-            // Check the header CRC.
-            byte[] headerCrcBytes = guaranteedRead(4, in);
-            long headerCrc = Integer.toUnsignedLong(this.util.bytesToInt(headerCrcBytes));
+        // Check the header CRC.
+        byte[] headerCrcBytes = guaranteedRead(4, in);
+        long headerCrc = Integer.toUnsignedLong(this.util.bytesToInt(headerCrcBytes));
 
-            CRC32 computedHeaderCrc = new CRC32();
-            computedHeaderCrc.update(flagsBytes);
-            computedHeaderCrc.update(idBytes);
-            computedHeaderCrc.update(payloadLengthBytes);
+        CRC32 computedHeaderCrc = new CRC32();
+        computedHeaderCrc.update(flagsBytes);
+        computedHeaderCrc.update(idBytes);
+        computedHeaderCrc.update(payloadLengthBytes);
 
-            long computedHeaderCrcValue = computedHeaderCrc.getValue();
-            this.logger.debug("(Header) Read CRC: %d, Computed CRC: %d", headerCrc, computedHeaderCrcValue);
+        long computedHeaderCrcValue = computedHeaderCrc.getValue();
+        this.logger.debug("(Header) Read CRC: %d, Computed CRC: %d", headerCrc, computedHeaderCrcValue);
 
-            if (headerCrc != computedHeaderCrcValue) {
-                this.logger.severe("Corrupt packet received! (Header CRC failed)");
+        if (headerCrc != computedHeaderCrcValue) {
+            this.logger.severe("Corrupt packet received! (Header CRC failed)");
+            in.reset(); // Important.
+            return null;
+        }
+
+        // Body reading
+        byte[] bodyCrcBytes = guaranteedRead(4, in);
+        long bodyCrc = Integer.toUnsignedLong(this.util.bytesToInt(bodyCrcBytes));
+
+        byte[] payload = guaranteedRead(payloadLength, in);
+
+        // Check the body CRC.
+        CRC32 computedBodyCrc = new CRC32();
+        computedBodyCrc.update(payload);
+
+        long computedBodyCrcValue = computedBodyCrc.getValue();
+        this.logger.debug("(Body) Read CRC: %d, Computed CRC: %d", bodyCrc, computedBodyCrcValue);
+
+        if (bodyCrc != computedBodyCrcValue) {
+            if (flags.get(FLAG_IGNORE_BODY_CRC)) {
+                this.logger.warn("Body CRC failed, continuing anyway (FLAG_IGNORE_BODY_CRC).");
+            } else {
+                this.logger.severe("Corrupt packet received! (Body CRC failed)");
+                in.reset(); // Important.
                 return null;
             }
-
-            // Body reading
-            byte[] bodyCrcBytes = guaranteedRead(4, in);
-            long bodyCrc = Integer.toUnsignedLong(this.util.bytesToInt(bodyCrcBytes));
-
-            byte[] payload = guaranteedRead(payloadLength, in);
-
-            // Check the body CRC.
-            CRC32 computedBodyCrc = new CRC32();
-            computedBodyCrc.update(payload);
-
-            long computedBodyCrcValue = computedBodyCrc.getValue();
-            this.logger.debug("(Body) Read CRC: %d, Computed CRC: %d", bodyCrc, computedBodyCrcValue);
-
-            if (bodyCrc != computedBodyCrcValue) {
-                if (flags.get(FLAG_IGNORE_BODY_CRC)) {
-                    this.logger.warn("Body CRC failed, continuing anyway (FLAG_IGNORE_BODY_CRC).");
-                } else {
-                    this.logger.severe("Corrupt packet received! (Body CRC failed)");
-                    return null;
-                }
-            }
-
-            // Success
-            this.logger.debug("Successfully decoded packet.");
-            return new Triple<>(flags, packetId, payload);
-        } finally {
-            in.reset();
         }
+
+        // Skip over this packet, makes subsequent searches faster.
+        in.reset();
+        in.skipNBytes(headerLength - headerMagic.length + payloadLength);
+
+        // Success
+        this.logger.debug("Successfully decoded packet.");
+        return new Triple<>(flags, packetId, payload);
     }
 
     public static byte[] guaranteedRead(int len, InputStream in) throws IOException {

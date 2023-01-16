@@ -30,10 +30,14 @@ public class Test_PacketDeserialization {
         io.getLogger().setCurrentLevel(LogLevel.ALL);
 
         long start = System.currentTimeMillis();
-        ByteArrayInputStream bains = new ByteArrayInputStream(getBytes());
+        byte[] bytes = getBytes();
 
-        while (true) {
-            try {
+        bytes[18]++; // Corrupt the first packet.
+
+        ByteArrayInputStream bains = new ByteArrayInputStream(bytes);
+
+        try {
+            while (true) {
                 Triple<Flags, Integer, byte[]> result = io.deserialize(bains);
                 int packetId = result.b();
                 byte[] payload = result.c();
@@ -44,13 +48,12 @@ public class Test_PacketDeserialization {
                     FastLogger.logStatic(test.testNumber);
                     long finish = System.currentTimeMillis();
                     FastLogger.logStatic("Took %d ms.", finish - start);
-                    System.exit(0); // Will otherwise hang forever.
                 } else {
                     FastLogger.logStatic("UNKNOWN PACKET ID: " + packetId);
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
+        } catch (IOException e) {
+            FastLogger.logException(e);
         }
     }
 
@@ -59,6 +62,7 @@ public class Test_PacketDeserialization {
         test.testNumber = 123456;
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        io.serialize(test, baos);
         io.serialize(test, baos);
 
         return baos.toByteArray();
