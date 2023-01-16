@@ -40,7 +40,7 @@ public class PacketIO {
     @Getter
     @Setter
     @NonNull
-    private Flags flags = new Flags();
+    private Flags flags = new Flags(); // Note that we only use the lower 16 bits. The upper 16 are not serialized.
 
     @Getter
     @Setter
@@ -159,8 +159,7 @@ public class PacketIO {
 
             byte[] payload = guaranteedRead(payloadLength, in);
 
-            // Checksum
-
+            // Check the body CRC.
             CRC32 computedBodyCrc = new CRC32();
             computedBodyCrc.update(payload);
 
