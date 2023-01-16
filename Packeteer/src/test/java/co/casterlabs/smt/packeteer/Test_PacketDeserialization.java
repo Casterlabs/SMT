@@ -17,10 +17,12 @@ import java.io.IOException;
 import java.util.concurrent.ThreadLocalRandom;
 
 import co.casterlabs.commons.functional.tuples.Triple;
-import co.casterlabs.smt.packeteer.io.PacketIO;
 import co.casterlabs.smt.packeteer.io.Flags;
+import co.casterlabs.smt.packeteer.io.PacketIO;
+import co.casterlabs.smt.packeteer.io.PacketeerInput;
+import co.casterlabs.smt.packeteer.io.PacketeerOutput;
 
-public class Test {
+public class Test_PacketDeserialization {
 
     // Should
     // - Unknown Packet ID
@@ -81,6 +83,26 @@ public class Test {
         baos.write(testBytes);
 
         return baos.toByteArray();
+    }
+
+}
+
+class TestPacket extends Packet {
+    public int testNumber;
+
+    @Override
+    protected void readIn(PacketeerInput in) throws IOException {
+        this.testNumber = in.readInt();
+    }
+
+    @Override
+    protected void writeOut(PacketeerOutput out) throws IOException {
+        out.writeInt(this.testNumber);
+    }
+
+    @Override
+    public int getId() {
+        return 42;
     }
 
 }
