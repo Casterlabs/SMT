@@ -1,14 +1,14 @@
 package co.casterlabs.smt.packeteer;
 
-import java.lang.reflect.Field;
+import java.util.Map;
 
 import co.casterlabs.smt.packeteer.io.BigEndianIOUtil;
 
 public class Test_ListReservedPacketIDs {
 
     public static void main(String[] args) throws IllegalArgumentException, IllegalAccessException {
-        for (Field f : ReservedPacketIDs.class.getFields()) {
-            print(f.getName(), f.getInt(null));
+        for (Map.Entry<String, Integer> e : ReservedPacketIDs.VALUES.entrySet()) {
+            print(e.getKey(), e.getValue());
         }
     }
 

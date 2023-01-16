@@ -1,21 +1,49 @@
 package co.casterlabs.smt.packeteer;
 
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 // Want to add something? Make a PR.
 public class ReservedPacketIDs {
+    public static final Map<String, Integer> VALUES;
+
+    static {
+        Map<String, Integer> map = new HashMap<>();
+
+        try {
+            final String IRB = "IRB_";
+
+            for (Field f : ReservedPacketIDs.class.getFields()) {
+                if (!f.getName().startsWith(IRB)) continue;
+
+                map.put(
+                    f.getName().substring(IRB.length()),
+                    f.getInt(null)
+                );
+            }
+        } catch (IllegalArgumentException | IllegalAccessException e) {
+            e.printStackTrace();
+        }
+
+        VALUES = Collections.unmodifiableMap(map);
+    }
+
     // @formatter:off
     
     // Signifies that the current packet should be treated differently. The rest of
     // the upper 8 bits form the "Reserved Type" which a hint of what a packet
     // contains (e.g Audio or Video).
-    public static final int ID_RESERVED_BIT = 1 << 31;
+    public static final int IRB_MARKER = 1 << 31;
 
     // Audio Codecs
-    public static final int IRB_AUDIO_TYPE = (1 << 24) | ID_RESERVED_BIT;
+    public static final int IRB_AUDIO_TYPE = (1 << 24) | IRB_MARKER;
     public static final int IRB_AUDIO__OPUS =  1 | IRB_AUDIO_TYPE;
     public static final int IRB_AUDIO__AAC  =  2 | IRB_AUDIO_TYPE;
 
     // Video Codecs
-    public static final int IRB_VIDEO_TYPE = (2 << 24) | ID_RESERVED_BIT;
+    public static final int IRB_VIDEO_TYPE = (2 << 24) | IRB_MARKER;
     public static final int IRB_VIDEO__RGB8  =  1 | IRB_VIDEO_TYPE;
     public static final int IRB_VIDEO__RGB10 =  2 | IRB_VIDEO_TYPE;
     public static final int IRB_VIDEO__AVC   = 20 | IRB_VIDEO_TYPE; // aka: h264, MPEG-4 Part 10
@@ -25,7 +53,7 @@ public class ReservedPacketIDs {
     public static final int IRB_VIDEO__AV1   = 24 | IRB_VIDEO_TYPE;
 
     // Containers
-    public static final int IRB_CONTAINER_TYPE = (3 << 24) | ID_RESERVED_BIT;
+    public static final int IRB_CONTAINER_TYPE = (3 << 24) | IRB_MARKER;
     public static final int IRB_CONTAINER__MKV    =  1 | IRB_CONTAINER_TYPE;
     public static final int IRB_CONTAINER__WEBM   =  2 | IRB_CONTAINER_TYPE;
     public static final int IRB_CONTAINER__MP4    =  3 | IRB_CONTAINER_TYPE;
