@@ -6,7 +6,13 @@ import java.io.OutputStream;
 import java.util.zip.CRC32;
 
 import co.casterlabs.commons.functional.tuples.Triple;
+import co.casterlabs.smt.packeteer.Packet;
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 
+@Accessors(chain = true)
 public class PacketIO {
     private static final byte[] headerMagic = {
             0,
@@ -29,25 +35,33 @@ public class PacketIO {
     public static final int FLAG_UNRELIABLE = 0;
     public static final int FLAG_IGNORE_BODY_CRC = 1;
 
-    public static void serialize(Flags flags, int id, byte[] payload, OutputStream out) throws IOException {
-        if (payload.length > bodyMaxLength) throw new IOException("Payload cannot be larger than " + bodyMaxLength);
+    @Getter
+    @Setter
+    @NonNull
+    private Flags flags = new Flags();
 
-        flags = flags.clone(); // Ensure nothing changes underneath us.
-        BigEndianIOUtil util = new BigEndianIOUtil();
+    private BigEndianIOUtil util = new BigEndianIOUtil();
+
+    public void serialize(Packet packet, OutputStream out) throws IOException {
+        this.serialize(packet.getId(), packet.serialize(), out);
+    }
+
+    public void serialize(int id, byte[] payload, OutputStream out) throws IOException {
+        if (payload.length > bodyMaxLength) throw new IOException("Payload cannot be larger than " + bodyMaxLength);
 
         // Magic
         out.write(headerMagic);
 
         // Flags
-        byte[] flagsBytes = util.shortToBytes((short) flags.getRawValue());
+        byte[] flagsBytes = this.util.shortToBytes((short) this.flags.getRawValue());
         out.write(flagsBytes);
 
         // ID
-        byte[] idBytes = util.intToBytes(id);
+        byte[] idBytes = this.util.intToBytes(id);
         out.write(idBytes);
 
         // Payload Length
-        byte[] payloadLengthBytes = util.shortToBytes((short) payload.length);
+        byte[] payloadLengthBytes = this.util.shortToBytes((short) payload.length);
         out.write(payloadLengthBytes);
 
         // CRC32 (Flags + ID + Payload Length)
@@ -55,12 +69,12 @@ public class PacketIO {
         headerCrc.update(flagsBytes);
         headerCrc.update(idBytes);
         headerCrc.update(payloadLengthBytes);
-        out.write(util.intToBytes((int) headerCrc.getValue()));
+        out.write(this.util.intToBytes((int) headerCrc.getValue()));
 
         // CRC32 (Body)
         CRC32 bodyCrc = new CRC32();
         bodyCrc.update(payload);
-        out.write(util.intToBytes((int) bodyCrc.getValue()));
+        out.write(this.util.intToBytes((int) bodyCrc.getValue()));
 
         // Payload
         out.write(payload);
@@ -69,7 +83,7 @@ public class PacketIO {
     /**
      * @return <IO Flags, Packet ID, Packet Body>
      */
-    public static Triple<Flags, Integer, byte[]> deserialize(InputStream in) throws IOException {
+    public Triple<Flags, Integer, byte[]> deserialize(InputStream in) throws IOException {
         if (!in.markSupported()) throw new IOException("InputStream#mark is unsupported, please pass in a buffered input stream to fix this.");
 
         int succeedingPosition = 0;
@@ -82,7 +96,7 @@ public class PacketIO {
 
                 if (succeedingPosition == headerMagic.length) {
                     // We've found the start of a packet!
-                    return continueDeserialization(in);
+                    return deserializePacket(in);
                 }
             } else {
                 succeedingPosition = 0; // Restart the search.
@@ -90,10 +104,8 @@ public class PacketIO {
         }
     }
 
-    private static Triple<Flags, Integer, byte[]> continueDeserialization(InputStream in) throws IOException {
+    private Triple<Flags, Integer, byte[]> deserializePacket(InputStream in) throws IOException {
         try {
-            BigEndianIOUtil util = new BigEndianIOUtil();
-
             // Header Magic has already been consumed irreversibly, but we still want to be
             // able to pick up where we left off.
             in.mark(bodyMaxLength + headerLength - headerMagic.length);
@@ -102,11 +114,11 @@ public class PacketIO {
             byte[] idBytes = guaranteedRead(4, in);
             byte[] payloadLengthBytes = guaranteedRead(2, in);
 
-            Flags flags = new Flags(util.bytesToShort(flagsBytes));
+            Flags flags = new Flags(this.util.bytesToShort(flagsBytes));
 
             // Check the header CRC.
             byte[] headerCrcBytes = guaranteedRead(4, in);
-            long headerCrc = Integer.toUnsignedLong(util.bytesToInt(headerCrcBytes));
+            long headerCrc = Integer.toUnsignedLong(this.util.bytesToInt(headerCrcBytes));
 
             CRC32 computedHeaderCrc = new CRC32();
             computedHeaderCrc.update(flagsBytes);
@@ -119,9 +131,9 @@ public class PacketIO {
 
             // Body reading
             byte[] bodyCrcBytes = guaranteedRead(4, in);
-            long bodyCrc = Integer.toUnsignedLong(util.bytesToInt(bodyCrcBytes));
+            long bodyCrc = Integer.toUnsignedLong(this.util.bytesToInt(bodyCrcBytes));
 
-            int payloadLength = util.bytesToShort(payloadLengthBytes);
+            int payloadLength = this.util.bytesToShort(payloadLengthBytes);
 
             byte[] payload = guaranteedRead(payloadLength, in);
 
@@ -135,7 +147,7 @@ public class PacketIO {
             }
 
             // Success
-            int packetId = util.bytesToInt(idBytes);
+            int packetId = this.util.bytesToInt(idBytes);
             return new Triple<>(flags, packetId, payload);
         } finally {
             in.reset();
