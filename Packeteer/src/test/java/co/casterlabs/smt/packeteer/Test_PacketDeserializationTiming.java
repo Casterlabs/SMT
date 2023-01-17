@@ -15,6 +15,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
+import org.jetbrains.annotations.Nullable;
+
 import co.casterlabs.smt.packeteer.io.PacketIO;
 import co.casterlabs.smt.packeteer.io.PacketIO.DeserializationResult;
 import co.casterlabs.smt.packeteer.io.PacketeerInput;
@@ -38,7 +40,7 @@ public class Test_PacketDeserializationTiming {
                 FastLogger.logStatic(result);
                 if (result.packetId == 42) {
                     TestPacket test = new TestPacket();
-                    test.deserialize(result.payload);
+                    test.deserialize(result.extendedId, result.payload);
                     FastLogger.logStatic(test.testNumber);
                 } else {
                     FastLogger.logStatic("UNKNOWN PACKET ID: " + result.packetId);
@@ -73,7 +75,7 @@ class TestPacket2 extends Packet {
     public int testNumber;
 
     @Override
-    protected void readIn(PacketeerInput in) throws IOException {
+    protected void readIn(@Nullable String extendedId, PacketeerInput in) throws IOException {
         this.testNumber = in.readInt();
     }
 

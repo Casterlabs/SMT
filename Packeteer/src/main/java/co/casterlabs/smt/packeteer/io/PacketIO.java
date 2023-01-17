@@ -3,7 +3,10 @@ package co.casterlabs.smt.packeteer.io;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.zip.CRC32;
+
+import org.jetbrains.annotations.Nullable;
 
 import co.casterlabs.smt.packeteer.Packet;
 import lombok.AccessLevel;
@@ -25,17 +28,18 @@ public class PacketIO {
             'T'
     };
 
-    private static final byte headerLength = 0
-        + 4 // Magic
-        + 2 // Flags
-        + 4 // ID
-        + 2 // Payload Length
-        + 8 // Timestamp
-        + 4 // CRC32 (Flags + ID + Payload Length + Timestamp)
-        + 4 // CRC32 (Payload)
+    private static final int headerLength = 0
+        + 4   // Magic
+        + 2   // Flags
+        + 4   // ID
+        + 255 // Extended ID (Null Terminated, UTF-8)
+        + 8   // Timestamp
+        + 2   // Payload Length
+        + 4   // CRC32 (Flags + ID + Extended ID + Payload Length + Timestamp)
+        + 4   // CRC32 (Payload)
     ;
 
-    public static final int bodyMaxLength = 32768 - headerLength; // Just shy of 32kb
+    public static final int bodyMaxLength = Short.MAX_VALUE - headerLength; // Just shy of 32kb
 
     public static final int FLAG_UNRELIABLE = 0; // Not used directly by packeteer, just defined here for other frameworks.
     public static final int FLAG_IGNORE_BODY_CRC = 1;
@@ -53,11 +57,12 @@ public class PacketIO {
     private BigEndianIOUtil util = new BigEndianIOUtil();
 
     public void serialize(Packet packet, OutputStream out) throws IOException {
-        this.serialize(packet.getId(), packet.serialize(), System.currentTimeMillis(), out);
+        this.serialize(packet.getId(), packet.getExtendedId(), packet.serialize(), System.currentTimeMillis(), out);
     }
 
-    public void serialize(int id, byte[] payload, long timestamp, OutputStream out) throws IOException {
+    public void serialize(int id, @Nullable String extendedId, byte[] payload, long timestamp, OutputStream out) throws IOException {
         if (payload.length > bodyMaxLength) throw new IOException("Payload cannot be larger than " + bodyMaxLength);
+        if ((extendedId != null) && extendedId.length() > 255) throw new IOException("Extended ID cannot be longer than 255 characters");
 
         // Magic
         out.write(headerMagic);
@@ -70,20 +75,29 @@ public class PacketIO {
         byte[] idBytes = this.util.intToBytes(id);
         out.write(idBytes);
 
-        // Payload Length
-        byte[] payloadLengthBytes = this.util.shortToBytes((short) payload.length);
-        out.write(payloadLengthBytes);
+        // Extended ID
+        byte[] extendedIdBytes = new byte[255];
+        if (extendedId != null) {
+            byte[] utf8 = extendedId.getBytes(StandardCharsets.UTF_8);
+            System.arraycopy(utf8, 0, extendedIdBytes, 0, utf8.length); // Leaves the rest of the bytes `null`.
+        }
+        out.write(extendedIdBytes);
 
         // Timestamp
         byte[] timestampBytes = this.util.longToBytes(timestamp);
         out.write(timestampBytes);
 
+        // Payload Length
+        byte[] payloadLengthBytes = this.util.shortToBytes((short) payload.length);
+        out.write(payloadLengthBytes);
+
         // CRC32 (Flags + ID + Payload Length + Timestamp)
         CRC32 headerCrc = new CRC32();
         headerCrc.update(flagsBytes);
         headerCrc.update(idBytes);
-        headerCrc.update(payloadLengthBytes);
+        headerCrc.update(extendedIdBytes);
         headerCrc.update(timestampBytes);
+        headerCrc.update(payloadLengthBytes);
         out.write(this.util.intToBytes((int) headerCrc.getValue()));
 
         // CRC32 (Body)
@@ -141,21 +155,44 @@ public class PacketIO {
         // able to pick up where we left off.
         in.mark(bodyMaxLength + headerLength - headerMagic.length);
 
+        // Flags
         byte[] flagsBytes = guaranteedRead(2, in);
         Flags flags = new Flags(this.util.bytesToShort(flagsBytes));
         this.logger.trace("flags=%s", flags.toString(16));
 
+        // ID
         byte[] idBytes = guaranteedRead(4, in);
         int packetId = this.util.bytesToInt(idBytes);
         this.logger.trace("packetId=%d", packetId);
 
-        byte[] payloadLengthBytes = guaranteedRead(2, in);
-        int payloadLength = this.util.bytesToShort(payloadLengthBytes);
-        this.logger.trace("payloadLength=%d", payloadLength);
+        // Extended ID
+        byte[] extendedIdBytes = guaranteedRead(255, in);
+        String extendedId = null;
+        {
+            int actualLength = 0;
+            for (byte b : extendedIdBytes) {
+                if (b == 0) {
+                    break;
+                }
+                actualLength++;
+            }
 
+            if (actualLength > 0) {
+                byte[] actualBytes = new byte[actualLength];
+                System.arraycopy(extendedIdBytes, 0, actualBytes, 0, actualLength);
+                extendedId = new String(actualBytes, StandardCharsets.UTF_8);
+            }
+        }
+
+        // Timestamp
         byte[] timestampBytes = guaranteedRead(8, in);
         long timestamp = this.util.bytesToLong(timestampBytes);
         this.logger.trace("timestamp=%d", timestamp);
+
+        // Payload Length
+        byte[] payloadLengthBytes = guaranteedRead(2, in);
+        short payloadLength = this.util.bytesToShort(payloadLengthBytes);
+        this.logger.trace("payloadLength=%d", payloadLength);
 
         // Check the header CRC.
         byte[] headerCrcBytes = guaranteedRead(4, in);
@@ -164,8 +201,9 @@ public class PacketIO {
         CRC32 computedHeaderCrc = new CRC32();
         computedHeaderCrc.update(flagsBytes);
         computedHeaderCrc.update(idBytes);
-        computedHeaderCrc.update(payloadLengthBytes);
+        computedHeaderCrc.update(extendedIdBytes);
         computedHeaderCrc.update(timestampBytes);
+        computedHeaderCrc.update(payloadLengthBytes);
 
         long computedHeaderCrcValue = computedHeaderCrc.getValue();
         this.logger.debug("(Header) Read CRC: %d, Computed CRC: %d", headerCrc, computedHeaderCrcValue);
@@ -205,7 +243,13 @@ public class PacketIO {
 
         // Success
         this.logger.debug("Successfully decoded packet.");
-        return new DeserializationResult(flags, packetId, payload, timestamp);
+        return new DeserializationResult(
+            flags,
+            packetId,
+            extendedId,
+            timestamp,
+            payload
+        );
     }
 
     public static byte[] guaranteedRead(int len, InputStream in) throws IOException {
@@ -227,8 +271,10 @@ public class PacketIO {
     public static class DeserializationResult {
         public final Flags flags;
         public final int packetId;
-        public final byte[] payload;
+        public final String extendedId;
         public final long timestamp;
+
+        public final @ToString.Exclude byte[] payload;
 
         @Override
         public String toString() {
