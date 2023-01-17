@@ -74,16 +74,16 @@ public class PacketIO {
         byte[] payloadLengthBytes = this.util.shortToBytes((short) payload.length);
         out.write(payloadLengthBytes);
 
-        // Payload Length
-        byte[] startedAtBytes = this.util.longToBytes(timestamp);
-        out.write(startedAtBytes);
+        // Timestamp
+        byte[] timestampBytes = this.util.longToBytes(timestamp);
+        out.write(timestampBytes);
 
         // CRC32 (Flags + ID + Payload Length + Timestamp)
         CRC32 headerCrc = new CRC32();
         headerCrc.update(flagsBytes);
         headerCrc.update(idBytes);
         headerCrc.update(payloadLengthBytes);
-        headerCrc.update(startedAtBytes);
+        headerCrc.update(timestampBytes);
         out.write(this.util.intToBytes((int) headerCrc.getValue()));
 
         // CRC32 (Body)
@@ -154,7 +154,7 @@ public class PacketIO {
         this.logger.trace("payloadLength=%d", payloadLength);
 
         byte[] timestampBytes = guaranteedRead(8, in);
-        long timestamp = this.util.bytesToShort(payloadLengthBytes);
+        long timestamp = this.util.bytesToLong(timestampBytes);
         this.logger.trace("timestamp=%d", timestamp);
 
         // Check the header CRC.
