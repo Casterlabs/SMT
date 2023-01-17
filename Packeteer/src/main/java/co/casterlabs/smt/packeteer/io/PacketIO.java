@@ -54,8 +54,6 @@ public class PacketIO {
     @NonNull
     private FastLogger logger = new FastLogger(LogLevel.NONE);
 
-    private BigEndianIOUtil util = new BigEndianIOUtil();
-
     public void serialize(Packet packet, OutputStream out) throws IOException {
         this.serialize(packet.getId(), packet.getExtendedId(), packet.serialize(), System.currentTimeMillis(), out);
     }
@@ -68,11 +66,11 @@ public class PacketIO {
         out.write(headerMagic);
 
         // Flags
-        byte[] flagsBytes = this.util.shortToBytes((short) this.flags.getRawValue());
+        byte[] flagsBytes = BigEndianIOUtil.shortToBytes((short) this.flags.getRawValue());
         out.write(flagsBytes);
 
         // ID
-        byte[] idBytes = this.util.intToBytes(id);
+        byte[] idBytes = BigEndianIOUtil.intToBytes(id);
         out.write(idBytes);
 
         // Extended ID
@@ -84,11 +82,11 @@ public class PacketIO {
         out.write(extendedIdBytes);
 
         // Timestamp
-        byte[] timestampBytes = this.util.longToBytes(timestamp);
+        byte[] timestampBytes = BigEndianIOUtil.longToBytes(timestamp);
         out.write(timestampBytes);
 
         // Payload Length
-        byte[] payloadLengthBytes = this.util.shortToBytes((short) payload.length);
+        byte[] payloadLengthBytes = BigEndianIOUtil.shortToBytes((short) payload.length);
         out.write(payloadLengthBytes);
 
         // CRC32 (Flags + ID + Payload Length + Timestamp)
@@ -98,12 +96,12 @@ public class PacketIO {
         headerCrc.update(extendedIdBytes);
         headerCrc.update(timestampBytes);
         headerCrc.update(payloadLengthBytes);
-        out.write(this.util.intToBytes((int) headerCrc.getValue()));
+        out.write(BigEndianIOUtil.intToBytes((int) headerCrc.getValue()));
 
         // CRC32 (Body)
         CRC32 bodyCrc = new CRC32();
         bodyCrc.update(payload);
-        out.write(this.util.intToBytes((int) bodyCrc.getValue()));
+        out.write(BigEndianIOUtil.intToBytes((int) bodyCrc.getValue()));
 
         // Payload
         out.write(payload);
@@ -157,12 +155,12 @@ public class PacketIO {
 
         // Flags
         byte[] flagsBytes = guaranteedRead(2, in);
-        Flags flags = new Flags(this.util.bytesToShort(flagsBytes));
+        Flags flags = new Flags(BigEndianIOUtil.bytesToShort(flagsBytes));
         this.logger.trace("flags=%s", flags.toString(16));
 
         // ID
         byte[] idBytes = guaranteedRead(4, in);
-        int packetId = this.util.bytesToInt(idBytes);
+        int packetId = BigEndianIOUtil.bytesToInt(idBytes);
         this.logger.trace("packetId=%d", packetId);
 
         // Extended ID
@@ -186,17 +184,17 @@ public class PacketIO {
 
         // Timestamp
         byte[] timestampBytes = guaranteedRead(8, in);
-        long timestamp = this.util.bytesToLong(timestampBytes);
+        long timestamp = BigEndianIOUtil.bytesToLong(timestampBytes);
         this.logger.trace("timestamp=%d", timestamp);
 
         // Payload Length
         byte[] payloadLengthBytes = guaranteedRead(2, in);
-        short payloadLength = this.util.bytesToShort(payloadLengthBytes);
+        short payloadLength = BigEndianIOUtil.bytesToShort(payloadLengthBytes);
         this.logger.trace("payloadLength=%d", payloadLength);
 
         // Check the header CRC.
         byte[] headerCrcBytes = guaranteedRead(4, in);
-        long headerCrc = Integer.toUnsignedLong(this.util.bytesToInt(headerCrcBytes));
+        long headerCrc = Integer.toUnsignedLong(BigEndianIOUtil.bytesToInt(headerCrcBytes));
 
         CRC32 computedHeaderCrc = new CRC32();
         computedHeaderCrc.update(flagsBytes);
@@ -216,7 +214,7 @@ public class PacketIO {
 
         // Body reading
         byte[] bodyCrcBytes = guaranteedRead(4, in);
-        long bodyCrc = Integer.toUnsignedLong(this.util.bytesToInt(bodyCrcBytes));
+        long bodyCrc = Integer.toUnsignedLong(BigEndianIOUtil.bytesToInt(bodyCrcBytes));
 
         byte[] payload = guaranteedRead(payloadLength, in);
 

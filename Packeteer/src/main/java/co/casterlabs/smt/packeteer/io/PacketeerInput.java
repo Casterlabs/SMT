@@ -19,7 +19,6 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 public class PacketeerInput {
-    private final BigEndianIOUtil util = new BigEndianIOUtil();
     private final InputStream stream;
 
     public byte readByte() throws IOException {
@@ -47,19 +46,19 @@ public class PacketeerInput {
     public long readLong() throws IOException {
         byte[] bytes = PacketIO.guaranteedRead(8, this.stream);
 
-        return this.util.bytesToLong(bytes);
+        return BigEndianIOUtil.bytesToLong(bytes);
     }
 
     public int readInt() throws IOException {
         byte[] bytes = PacketIO.guaranteedRead(4, this.stream);
 
-        return this.util.bytesToInt(bytes);
+        return BigEndianIOUtil.bytesToInt(bytes);
     }
 
     public short readShort() throws IOException {
         byte[] bytes = PacketIO.guaranteedRead(2, this.stream);
 
-        return this.util.bytesToShort(bytes);
+        return BigEndianIOUtil.bytesToShort(bytes);
     }
 
     public boolean readBoolean() throws IOException {

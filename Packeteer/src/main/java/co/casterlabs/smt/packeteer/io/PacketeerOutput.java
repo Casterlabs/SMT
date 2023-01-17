@@ -20,7 +20,6 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 public class PacketeerOutput {
-    private final BigEndianIOUtil util = new BigEndianIOUtil();
     private final OutputStream stream;
 
     public PacketeerOutput writeByte(byte b) throws IOException {
@@ -46,17 +45,17 @@ public class PacketeerOutput {
     }
 
     public PacketeerOutput writeLong(long l) throws IOException {
-        this.stream.write(this.util.longToBytes(l));
+        this.stream.write(BigEndianIOUtil.longToBytes(l));
         return this;
     }
 
     public PacketeerOutput writeInt(int i) throws IOException {
-        this.stream.write(this.util.intToBytes(i));
+        this.stream.write(BigEndianIOUtil.intToBytes(i));
         return this;
     }
 
     public PacketeerOutput writeShort(short s) throws IOException {
-        this.stream.write(this.util.shortToBytes(s));
+        this.stream.write(BigEndianIOUtil.shortToBytes(s));
         return this;
     }
 

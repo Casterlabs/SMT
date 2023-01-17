@@ -13,7 +13,7 @@ public class Test_ListReservedPacketIDs {
     }
 
     private static void print(String name, int value) {
-        byte[] bytes = new BigEndianIOUtil().intToBytes(value);
+        byte[] bytes = BigEndianIOUtil.intToBytes(value);
 
         System.out.printf("%-24s: ", name);
         for (byte b : bytes) {
