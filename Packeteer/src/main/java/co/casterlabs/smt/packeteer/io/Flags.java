@@ -30,4 +30,11 @@ public class Flags {
         return new Flags(this.rawValue);
     }
 
+    @Override
+    public String toString() {
+        return String
+            .format("%32s", Integer.toBinaryString(this.rawValue))
+            .replace(' ', '0');
+    }
+
 }

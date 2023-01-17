@@ -5,11 +5,13 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.zip.CRC32;
 
-import co.casterlabs.commons.functional.tuples.Triple;
 import co.casterlabs.smt.packeteer.Packet;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 import xyz.e3ndr.fastloggingframework.logging.FastLogger;
 import xyz.e3ndr.fastloggingframework.logging.LogLevel;
@@ -28,7 +30,8 @@ public class PacketIO {
         + 2 // Flags
         + 4 // ID
         + 2 // Payload Length
-        + 4 // CRC32 (Flags + ID + Payload Length)
+        + 8 // Timestamp
+        + 4 // CRC32 (Flags + ID + Payload Length + Timestamp)
         + 4 // CRC32 (Payload)
     ;
 
@@ -50,10 +53,10 @@ public class PacketIO {
     private BigEndianIOUtil util = new BigEndianIOUtil();
 
     public void serialize(Packet packet, OutputStream out) throws IOException {
-        this.serialize(packet.getId(), packet.serialize(), out);
+        this.serialize(packet.getId(), packet.serialize(), System.currentTimeMillis(), out);
     }
 
-    public void serialize(int id, byte[] payload, OutputStream out) throws IOException {
+    public void serialize(int id, byte[] payload, long timestamp, OutputStream out) throws IOException {
         if (payload.length > bodyMaxLength) throw new IOException("Payload cannot be larger than " + bodyMaxLength);
 
         // Magic
@@ -71,11 +74,16 @@ public class PacketIO {
         byte[] payloadLengthBytes = this.util.shortToBytes((short) payload.length);
         out.write(payloadLengthBytes);
 
-        // CRC32 (Flags + ID + Payload Length)
+        // Payload Length
+        byte[] startedAtBytes = this.util.longToBytes(timestamp);
+        out.write(startedAtBytes);
+
+        // CRC32 (Flags + ID + Payload Length + Timestamp)
         CRC32 headerCrc = new CRC32();
         headerCrc.update(flagsBytes);
         headerCrc.update(idBytes);
         headerCrc.update(payloadLengthBytes);
+        headerCrc.update(startedAtBytes);
         out.write(this.util.intToBytes((int) headerCrc.getValue()));
 
         // CRC32 (Body)
@@ -90,7 +98,7 @@ public class PacketIO {
     /**
      * @return <IO Flags, Packet ID, Packet Body>
      */
-    public Triple<Flags, Integer, byte[]> deserialize(InputStream in) throws IOException {
+    public DeserializationResult deserialize(InputStream in) throws IOException {
         if (!in.markSupported()) throw new IOException("InputStream#mark is unsupported, please pass in a buffered input stream to fix this.");
 
         int succeedingPosition = 0;
@@ -109,7 +117,7 @@ public class PacketIO {
                 if (succeedingPosition == headerMagic.length) {
                     try {
                         this.logger.debug("Found start of packet!");
-                        Triple<Flags, Integer, byte[]> result = deserializePacket(in);
+                        DeserializationResult result = deserializePacket(in);
 
                         if (result == null) {
                             succeedingPosition = 0; // Corrupt packet, restart the search.
@@ -128,14 +136,14 @@ public class PacketIO {
         }
     }
 
-    private Triple<Flags, Integer, byte[]> deserializePacket(InputStream in) throws IOException {
+    private DeserializationResult deserializePacket(InputStream in) throws IOException {
         // Header Magic has already been consumed irreversibly, but we still want to be
         // able to pick up where we left off.
         in.mark(bodyMaxLength + headerLength - headerMagic.length);
 
         byte[] flagsBytes = guaranteedRead(2, in);
         Flags flags = new Flags(this.util.bytesToShort(flagsBytes));
-        this.logger.trace("flags=%s", String.format("%16s", Integer.toBinaryString(flags.getRawValue())).replace(' ', '0'));
+        this.logger.trace("flags=%s (Lower 16 only)", flags);
 
         byte[] idBytes = guaranteedRead(4, in);
         int packetId = this.util.bytesToInt(idBytes);
@@ -145,6 +153,10 @@ public class PacketIO {
         int payloadLength = this.util.bytesToShort(payloadLengthBytes);
         this.logger.trace("payloadLength=%d", payloadLength);
 
+        byte[] timestampBytes = guaranteedRead(8, in);
+        long timestamp = this.util.bytesToShort(payloadLengthBytes);
+        this.logger.trace("timestamp=%d", timestamp);
+
         // Check the header CRC.
         byte[] headerCrcBytes = guaranteedRead(4, in);
         long headerCrc = Integer.toUnsignedLong(this.util.bytesToInt(headerCrcBytes));
@@ -153,6 +165,7 @@ public class PacketIO {
         computedHeaderCrc.update(flagsBytes);
         computedHeaderCrc.update(idBytes);
         computedHeaderCrc.update(payloadLengthBytes);
+        computedHeaderCrc.update(timestampBytes);
 
         long computedHeaderCrcValue = computedHeaderCrc.getValue();
         this.logger.debug("(Header) Read CRC: %d, Computed CRC: %d", headerCrc, computedHeaderCrcValue);
@@ -192,7 +205,7 @@ public class PacketIO {
 
         // Success
         this.logger.debug("Successfully decoded packet.");
-        return new Triple<>(flags, packetId, payload);
+        return new DeserializationResult(flags, packetId, payload, timestamp);
     }
 
     public static byte[] guaranteedRead(int len, InputStream in) throws IOException {
@@ -208,6 +221,16 @@ public class PacketIO {
         }
 
         return buf;
+    }
+
+    @ToString
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
+    public static class DeserializationResult {
+        public final Flags flags;
+        public final int packetId;
+        public final byte[] payload;
+        public final long timestamp;
+
     }
 
 }

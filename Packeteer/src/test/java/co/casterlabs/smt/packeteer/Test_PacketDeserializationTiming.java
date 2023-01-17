@@ -15,9 +15,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-import co.casterlabs.commons.functional.tuples.Triple;
-import co.casterlabs.smt.packeteer.io.Flags;
 import co.casterlabs.smt.packeteer.io.PacketIO;
+import co.casterlabs.smt.packeteer.io.PacketIO.DeserializationResult;
 import co.casterlabs.smt.packeteer.io.PacketeerInput;
 import co.casterlabs.smt.packeteer.io.PacketeerOutput;
 import xyz.e3ndr.fastloggingframework.logging.FastLogger;
@@ -35,16 +34,14 @@ public class Test_PacketDeserializationTiming {
         long start = System.currentTimeMillis();
         try {
             while (true) {
-                Triple<Flags, Integer, byte[]> result = io.deserialize(bains);
-                int packetId = result.b();
-                byte[] payload = result.c();
-
-                if (packetId == 42) {
-                    TestPacket2 test = new TestPacket2();
-                    test.deserialize(payload);
+                DeserializationResult result = io.deserialize(bains);
+                FastLogger.logStatic(result);
+                if (result.packetId == 42) {
+                    TestPacket test = new TestPacket();
+                    test.deserialize(result.payload);
                     FastLogger.logStatic(test.testNumber);
                 } else {
-                    FastLogger.logStatic("UNKNOWN PACKET ID: " + packetId);
+                    FastLogger.logStatic("UNKNOWN PACKET ID: " + result.packetId);
                 }
             }
         } catch (IOException e) {
