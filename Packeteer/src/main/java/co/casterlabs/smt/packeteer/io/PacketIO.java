@@ -143,7 +143,7 @@ public class PacketIO {
 
         byte[] flagsBytes = guaranteedRead(2, in);
         Flags flags = new Flags(this.util.bytesToShort(flagsBytes));
-        this.logger.trace("flags=%s (Lower 16 only)", flags);
+        this.logger.trace("flags=%s", flags.toString(16));
 
         byte[] idBytes = guaranteedRead(4, in);
         int packetId = this.util.bytesToInt(idBytes);
@@ -223,13 +223,24 @@ public class PacketIO {
         return buf;
     }
 
-    @ToString
     @AllArgsConstructor(access = AccessLevel.PRIVATE)
     public static class DeserializationResult {
         public final Flags flags;
         public final int packetId;
         public final byte[] payload;
         public final long timestamp;
+
+        @Override
+        public String toString() {
+            return String.format(
+                "PacketIO.DeserializationResult(flags=%s, packetId=%d, extendedId=%s, timestamp=%d, payloadLength=%d)",
+                this.flags.toString(16),
+                this.packetId,
+                this.extendedId,
+                this.timestamp,
+                this.payload.length
+            );
+        }
 
     }
 

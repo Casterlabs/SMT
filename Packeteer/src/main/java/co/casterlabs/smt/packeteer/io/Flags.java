@@ -32,8 +32,13 @@ public class Flags {
 
     @Override
     public String toString() {
+        return this.toString(32);
+    }
+
+    public String toString(int digits) {
+        if (digits < 0 || digits > 32) throw new IllegalArgumentException("toString(digits) must be within 0-32");
         return String
-            .format("%32s", Integer.toBinaryString(this.rawValue))
+            .format("%" + digits + "s", Integer.toBinaryString(this.rawValue))
             .replace(' ', '0');
     }
 
