@@ -53,7 +53,7 @@ public class PacketIO {
     public static final int bodyMaxLength = Short.MAX_VALUE - headerLength; // Just shy of 32kb
 
     public static final int FLAG_UNRELIABLE = 0; // Not used directly by packeteer, just defined here for other frameworks.
-    public static final int FLAG_IGNORE_BODY_CRC = 1;
+    public static final int FLAG_IGNORE_PAYLOAD_CRC = 1;
 
     @Getter
     @Setter
@@ -237,7 +237,7 @@ public class PacketIO {
         this.logger.debug("(Body) Read CRC: %d, Computed CRC: %d", bodyCrc, computedBodyCrcValue);
 
         if (bodyCrc != computedBodyCrcValue) {
-            if (flags.get(FLAG_IGNORE_BODY_CRC)) {
+            if (flags.get(FLAG_IGNORE_PAYLOAD_CRC)) {
                 this.logger.warn("Body CRC failed, continuing anyway (FLAG_IGNORE_BODY_CRC).");
             } else {
                 this.logger.severe("Corrupt packet received! (Body CRC failed)");
