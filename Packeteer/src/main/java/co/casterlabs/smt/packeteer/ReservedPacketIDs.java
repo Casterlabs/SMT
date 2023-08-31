@@ -22,12 +22,14 @@ public class ReservedPacketIDs {
 
     static {
         Map<String, Integer> map = new HashMap<>();
+        VALUES = Collections.unmodifiableMap(map);
 
         try {
             final String IRB = "IRB_";
 
             for (Field f : ReservedPacketIDs.class.getFields()) {
                 if (!f.getName().startsWith(IRB)) continue;
+                if (f.getName().equals("IRB_MARKER")) continue;
 
                 map.put(
                     f.getName().substring(IRB.length()),
@@ -37,8 +39,6 @@ public class ReservedPacketIDs {
         } catch (IllegalArgumentException | IllegalAccessException e) {
             e.printStackTrace();
         }
-
-        VALUES = Collections.unmodifiableMap(map);
     }
 
     // Signifies that the current packet should be treated differently.
